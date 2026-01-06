@@ -25,6 +25,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+
+     "extra": {
+      "EXPO_PUBLIC_PLANTNET_API_URL": "${EXPO_PUBLIC_PLANTNET_API_URL}",
+      "EXPO_PUBLIC_PLANTNET_API_KEY": "${EXPO_PUBLIC_PLANTNET_API_KEY}",
+      "EXPO_PUBLIC_KINDUISE_API_URL": "${EXPO_PUBLIC_KINDUISE_API_URL}",
+      "EXPO_PUBLIC_KINDUISE_API_KEY": "${EXPO_PUBLIC_KINDUISE_API_KEY}"
     }
   }
 }

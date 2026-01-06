@@ -42,6 +42,12 @@ class PlantNetService {
 
     try {
       console.log('🌿 Identificando planta com PlantNet...');
+      console.log(
+        API_CONFIG.PLANTNET.API_KEY, 
+        API_CONFIG.PLANTNET.URL,
+    API_CONFIG.KINDUISE.HEALTH_URL,
+API_CONFIG.KINDUISE.API_KEY);
+      
       
       // Usar FormData (método recomendado com API key)
       const formData = new FormData();

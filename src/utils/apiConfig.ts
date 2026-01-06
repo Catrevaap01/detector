@@ -1,10 +1,13 @@
 // src/utils/apiConfig.ts
+import { ENV } from '../config/env';
+
+console.log(ENV.PLANTNET_API_URL);
+
 export const API_CONFIG = {
   // PlantNet API (GRATUITA com limite)
   PLANTNET: {
-    URL: 'https://my-api.plantnet.org/v2/identify/all',
-    // Obtenha sua API key em: https://my.plantnet.org/account
-    API_KEY: '2b10NUANgaKd5MMW3M42RO0',
+    URL: ENV.PLANTNET_API_URL,
+    API_KEY: ENV.PLANTNET_API_KEY,
     
     // Projetos disponíveis
     PROJECTS: {
@@ -23,8 +26,8 @@ export const API_CONFIG = {
 
   // Kindwise Plant.health API (Premium)
   KINDUISE: {
-    HEALTH_URL: 'https://crop.kindwise.com/api/v1',
-    API_KEY: 'gLyHz6bDrcx3fJDFyqAS1QKD7lQLH5eOr6TE8AgVROfh3sIeR8', // ← Adicione quando tiver
+    HEALTH_URL: ENV.KINDUISE_API_URL,
+    API_KEY:ENV.KINDUISE_API_KEY,
   },
 
   // Palavras-chave para identificar pragas
