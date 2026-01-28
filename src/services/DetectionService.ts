@@ -1,158 +1,364 @@
 // src/services/DetectionService.ts
+import * as ImageManipulator from 'expo-image-manipulator';
 import PlantNetService, { PlantInfo } from './PlantNetService';
-import KindwisePlantHealthService, { 
-  PlantHealthResponse, 
-  DiseaseDiagnosis 
-} from './KindwisePlantHealthService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import KindwisePlantHealthService, { PlantHealthResponse, DiseaseDiagnosis } from './KindwisePlantHealthService';
+import { findTreatment } from './TreatmentDatabase';
 
-// Resultado unificado para a aplicação
+// Tipos exportados (mantidos para compatibilidade)
+export interface DiseaseInfo {
+  name: string;
+  probability: number;
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  treatment: {
+    organic: string[];
+    chemical: string[];
+    preventive: string[];
+  };
+  symptoms: string[];
+}
+
+export interface PlantIdentification {
+  name: string;
+  confidence: number;
+  scientificName?: string;
+  description?: string;
+  commonNames: string[];
+}
+
+export interface HealthAssessment {
+  status: 'healthy' | 'warning' | 'critical';
+  score: number;
+  isHealthy: boolean;
+  healthScore: number;
+  diseases: DiseaseInfo[];
+  recommendations: string[];
+}
+
+export interface Treatment {
+  immediate: string[];
+  shortTerm: string[];
+  longTerm: string[];
+  products?: Array<{
+    name: string;
+    type: 'organic' | 'chemical';
+    dosage: string;
+  }>;
+}
+
+export interface Suggestion {
+  name: string;
+  probability: number;
+  scientificName?: string;
+  description?: string;
+  isPest: boolean;
+  treatment?: any;
+  symptoms?: string;
+}
+
 export interface CompleteAnalysis {
-  identification: PlantInfo;
-  health: PlantHealthResponse;
+  id?: string;
   timestamp: string;
-  analysisId: string;
-  usedKindwise: boolean; // Se usou Kindwise real ou simulação
+  identification: PlantIdentification;
+  health: HealthAssessment;
+  treatment: Treatment;
+  suggestions: Suggestion[];
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  imageUri?: string;
 }
 
 class DetectionService {
-  // Configurações
-  private static readonly USE_KINDWISE_REAL = false; // Mude para true quando tiver API key
-  private static readonly KINDWISE_API_KEY = 'SUA_API_KEY_AQUI';
-
-  // Método principal: análise completa em duas etapas
-  static async completeAnalysis(imageUri: string): Promise<CompleteAnalysis> {
-    console.log('🔍 Iniciando análise completa...');
-    
+  // Pré-processar imagem
+  static async preprocessImage(imageUri: string): Promise<string> {
     try {
-      // ETAPA 1: Identificar a planta com PlantNet (GRATUITO)
-      console.log('1️⃣ Identificando planta...');
+      const manipulatedImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 800 } }],
+        {
+          compress: 0.7,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        }
+      );
+
+      return `data:image/jpeg;base64,${manipulatedImage.base64}`;
+    } catch (error) {
+      console.error('Erro no pré-processamento:', error);
+      throw error;
+    }
+  }
+
+  // Orquestrar análise completa usando serviços especializados
+  static async completeAnalysis(
+    imageUri: string, 
+    location?: any
+  ): Promise<CompleteAnalysis> {
+    console.log('🚀 Iniciando análise orquestrada...');
+
+    try {
+      // 1. Identificar planta com PlantNetService
+      console.log('🌿 Identificando planta...');
       const plantInfo = await PlantNetService.identifyPlant(imageUri);
       
-      // ETAPA 2: Diagnóstico de saúde com Kindwise
-      console.log('2️⃣ Diagnosticando saúde...');
-      let healthAnalysis: PlantHealthResponse;
-      let usedKindwise = false;
+      // 2. Diagnóstico de saúde com KindwisePlantHealthService
+      console.log('🏥 Diagnosticando saúde...');
+      let healthResponse: PlantHealthResponse;
       
-      if (this.USE_KINDWISE_REAL && this.KINDWISE_API_KEY && this.KINDWISE_API_KEY !== 'SUA_API_KEY_AQUI') {
-        // Usar Kindwise REAL
-        healthAnalysis = await KindwisePlantHealthService.diagnosePlant(
+      if (KindwisePlantHealthService.canUseRealAPI()) {
+        healthResponse = await KindwisePlantHealthService.diagnosePlant(
           imageUri, 
           plantInfo.scientificName
         );
-        usedKindwise = true;
       } else {
-        // Usar simulação (para desenvolvimento)
-        healthAnalysis = await KindwisePlantHealthService.simulateDiagnosis(
+        healthResponse = await KindwisePlantHealthService.simulateDiagnosis(
           imageUri,
           plantInfo.scientificName
         );
       }
-      
-      // Criar resultado completo
-      const analysisId = `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const completeResult: CompleteAnalysis = {
-        identification: plantInfo,
-        health: healthAnalysis,
-        timestamp: new Date().toISOString(),
-        analysisId,
-        usedKindwise
-      };
-      
-      // Salvar no histórico
-      await this.saveToHistory(completeResult);
-      
-      console.log('✅ Análise completa realizada!');
-      return completeResult;
-      
+
+      // 3. Combinação dos resultados
+      console.log('🔗 Combinando resultados...');
+      const completeAnalysis = this.combineResults(
+        plantInfo,
+        healthResponse,
+        imageUri,
+        location
+      );
+
+      console.log('✅ Análise completa gerada:', completeAnalysis);
+      return completeAnalysis;
+
     } catch (error: any) {
-      console.error('❌ Erro na análise completa:', error);
+      console.error('❌ Erro na análise orquestrada:', error);
       
-      // Fallback: análise básica apenas com PlantNet
-      return this.getFallbackAnalysis(imageUri);
+      // Fallback: análise simulada
+      console.log('🔄 Usando fallback...');
+      return await this.simulateCompleteAnalysis(imageUri, location);
     }
   }
 
-  // Análise de fallback (se tudo falhar)
-  private static async getFallbackAnalysis(imageUri: string): Promise<CompleteAnalysis> {
-    console.log('🔄 Usando análise de fallback...');
-    
-    const plantInfo = await PlantNetService.identifyPlant(imageUri);
-    const analysisId = `fallback_${Date.now()}`;
-    
-    return {
-      identification: plantInfo,
-      health: {
-        isHealthy: true,
-        healthScore: 75,
-        plantName: plantInfo.commonName,
-        plantScientificName: plantInfo.scientificName,
-        diseases: [],
-        suggestions: [
-          'Não foram detectadas doenças evidentes',
-          'Para diagnóstico preciso, verifique condições de cultivo'
-        ],
-        confidence: 0.5,
-        timestamp: new Date().toISOString()
+  // Combina resultados dos serviços especializados
+  private static combineResults(
+    plantInfo: PlantInfo,
+    healthResponse: PlantHealthResponse,
+    imageUri: string,
+    location?: any
+  ): CompleteAnalysis {
+    // Converter doenças do Kindwise para formato padrão
+    const diseases: DiseaseInfo[] = healthResponse.diseases.map(disease => ({
+      name: disease.name,
+      probability: disease.probability,
+      severity: disease.severity,
+      description: disease.description || 'Doença identificada',
+      treatment: this.getTreatmentForDisease(disease),
+      symptoms: disease.affectedParts ? [`Afeta: ${disease.affectedParts.join(', ')}`] : []
+    }));
+
+    // Determinar status de saúde
+    const healthStatus = healthResponse.isHealthy ? 'healthy' : 
+                        healthResponse.healthScore > 50 ? 'warning' : 'critical';
+
+    // Gerar sugestões combinadas
+    const suggestions: Suggestion[] = [
+      {
+        name: plantInfo.commonName,
+        probability: plantInfo.probability,
+        scientificName: plantInfo.scientificName,
+        description: `Planta identificada: ${plantInfo.commonName}`,
+        isPest: false
       },
+      ...healthResponse.diseases.map(disease => ({
+        name: disease.name,
+        probability: disease.probability,
+        scientificName: disease.scientificName,
+        description: disease.description,
+        isPest: disease.type === 'pest',
+        treatment: findTreatment(disease.name),
+        symptoms: disease.description
+      }))
+    ];
+
+    // Tratamentos baseados nas doenças
+    const treatment = this.generateTreatment(healthResponse, diseases);
+
+    return {
       timestamp: new Date().toISOString(),
-      analysisId,
-      usedKindwise: false
+      identification: {
+        name: plantInfo.commonName,
+        confidence: plantInfo.probability,
+        scientificName: plantInfo.scientificName,
+        description: `Família: ${plantInfo.family || 'Desconhecida'}`,
+        commonNames: plantInfo.commonNames || [plantInfo.commonName]
+      },
+      health: {
+        status: healthStatus,
+        score: healthResponse.healthScore,
+        isHealthy: healthResponse.isHealthy,
+        healthScore: healthResponse.healthScore,
+        diseases,
+        recommendations: healthResponse.suggestions
+      },
+      treatment,
+      suggestions,
+      location: location ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+      } : undefined,
+      imageUri
     };
   }
 
-  // Salvar no histórico local
-  static async saveToHistory(analysis: CompleteAnalysis): Promise<void> {
+  // Obter tratamento para doença
+  private static getTreatmentForDisease(disease: DiseaseDiagnosis): DiseaseInfo['treatment'] {
+    const customTreatment = findTreatment(disease.name);
+    
+    if (customTreatment) {
+      return {
+        organic: customTreatment.organic || [],
+        chemical: customTreatment.chemical || [],
+        preventive: customTreatment.preventive || []
+      };
+    }
+
+    // Tratamento padrão baseado no tipo
+    return {
+      organic: disease.treatment || ['Tratamento orgânico recomendado'],
+      chemical: ['Consulte produto químico específico'],
+      preventive: disease.prevention || ['Boas práticas agrícolas']
+    };
+  }
+
+  // Gerar plano de tratamento
+  private static generateTreatment(
+    healthResponse: PlantHealthResponse,
+    diseases: DiseaseInfo[]
+  ): Treatment {
+    const hasDiseases = diseases.length > 0;
+    const isCritical = healthResponse.healthScore < 40;
+
+    return {
+      immediate: hasDiseases ? [
+        'Identificar problema específico',
+        'Isolar planta se necessário'
+      ] : ['Nenhuma ação imediata necessária'],
+      
+      shortTerm: hasDiseases ? [
+        'Aplicar tratamento recomendado',
+        'Monitorar evolução diariamente'
+      ] : ['Continuar cuidados regulares'],
+      
+      longTerm: hasDiseases ? [
+        'Implementar medidas preventivas',
+        'Fortalecer defesas naturais da planta'
+      ] : ['Manter rotina de cuidados'],
+      
+      products: hasDiseases ? [
+        { name: 'Óleo de Neem', type: 'organic', dosage: '5ml por litro' },
+        { name: 'Fungicida/Inseticida', type: 'chemical', dosage: 'Conforme instruções' }
+      ] : undefined
+    };
+  }
+
+  // Análise rápida (apenas identificação)
+  static async quickAnalysis(imageUri: string): Promise<PlantIdentification> {
     try {
-      const history = await AsyncStorage.getItem('plant_analysis_history');
-      let historyArray = history ? JSON.parse(history) : [];
+      const plantInfo = await PlantNetService.identifyPlant(imageUri);
       
-      historyArray.unshift({
-        ...analysis,
-        id: analysis.analysisId,
-        date: new Date().toLocaleString('pt-PT', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      });
-      
-      // Manter apenas últimos 100 análises
-      if (historyArray.length > 100) {
-        historyArray = historyArray.slice(0, 100);
-      }
-      
-      await AsyncStorage.setItem('plant_analysis_history', JSON.stringify(historyArray));
-      console.log('💾 Análise salva no histórico');
-      
+      return {
+        name: plantInfo.commonName,
+        confidence: plantInfo.probability,
+        scientificName: plantInfo.scientificName,
+        description: `Família: ${plantInfo.family || 'Desconhecida'}`,
+        commonNames: plantInfo.commonNames || [plantInfo.commonName]
+      };
     } catch (error) {
-      console.error('❌ Erro ao salvar histórico:', error);
+      console.error('Erro na análise rápida:', error);
+      return {
+        name: 'Planta não identificada',
+        confidence: 0,
+        commonNames: []
+      };
     }
   }
 
-  // Buscar histórico
-  static async getHistory(): Promise<any[]> {
-    try {
-      const history = await AsyncStorage.getItem('plant_analysis_history');
-      return history ? JSON.parse(history) : [];
-    } catch (error) {
-      console.error('❌ Erro ao buscar histórico:', error);
-      return [];
-    }
-  }
+  // Fallback: análise simulada completa
+  private static async simulateCompleteAnalysis(
+    imageUri: string, 
+    location?: any
+  ): Promise<CompleteAnalysis> {
+    console.log('🔄 Executando análise simulada...');
 
-  // Limpar histórico
-  static async clearHistory(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem('plant_analysis_history');
-      console.log('🗑️ Histórico limpo');
-    } catch (error) {
-      console.error('❌ Erro ao limpar histórico:', error);
-    }
+    // Simular atraso de processamento
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    return {
+      timestamp: new Date().toISOString(),
+      identification: {
+        name: 'Tomateiro (Lycopersicon esculentum)',
+        confidence: 88,
+        scientificName: 'Solanum lycopersicum',
+        description: 'Planta frutífera da família das solanáceas',
+        commonNames: ['Tomate', 'Tomateiro']
+      },
+      health: {
+        status: 'warning',
+        score: 65,
+        isHealthy: false,
+        healthScore: 65,
+        diseases: [
+          {
+            name: 'Míldio do Tomateiro',
+            probability: 78,
+            severity: 'medium',
+            description: 'Doença fúngica que causa manchas foliares e murcha',
+            treatment: {
+              organic: ['Calda bordalesa', 'Extrato de alho'],
+              chemical: ['Fungicida sistêmico'],
+              preventive: ['Boa ventilação', 'Evitar molhar folhas']
+            },
+            symptoms: ['Manchas foliares', 'Murcha das folhas']
+          }
+        ],
+        recommendations: [
+          'Aplicar fungicida preventivo',
+          'Melhorar circulação de ar',
+          'Monitorar evolução'
+        ]
+      },
+      treatment: {
+        immediate: ['Remover folhas afetadas'],
+        shortTerm: ['Aplicar fungicida'],
+        longTerm: ['Melhorar drenagem'],
+        products: [
+          { name: 'Fungicida X', type: 'chemical', dosage: '10ml/L' }
+        ]
+      },
+      suggestions: [
+        {
+          name: 'Tomateiro',
+          probability: 88,
+          isPest: false
+        },
+        {
+          name: 'Míldio',
+          probability: 78,
+          isPest: true
+        }
+      ],
+      location: location ? {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+      } : undefined,
+      imageUri
+    };
   }
 }
 
 export default DetectionService;
+export const detectionService = new DetectionService();

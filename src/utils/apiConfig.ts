@@ -1,8 +1,6 @@
 // src/utils/apiConfig.ts
 import { ENV } from '../config/env';
 
-console.log(ENV.PLANTNET_API_URL);
-
 export const API_CONFIG = {
   // PlantNet API (GRATUITA com limite)
   PLANTNET: {
@@ -24,7 +22,7 @@ export const API_CONFIG = {
     }
   },
 
-  // Kindwise Plant.health API (Premium)
+  // Kindwise Plant.health API
   KINDUISE: {
     HEALTH_URL: ENV.KINDUISE_API_URL,
     API_KEY:ENV.KINDUISE_API_KEY,
