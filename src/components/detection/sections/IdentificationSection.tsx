@@ -57,6 +57,18 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
     },
   }));
 
+  // Extrair dados corretamente da estrutura
+  const identification = analysis.identification;
+  const confidence = identification.confidence;
+  const scientificName = identification.scientificName;
+  const commonName = identification.name;
+  const family = identification.description?.replace('Família: ', '') || 'Não identificada';
+  
+  // Extrair nomes comuns do array ou do nome principal
+  const commonNames = identification.commonNames && identification.commonNames.length > 0 
+    ? identification.commonNames 
+    : [commonName];
+
   return (
     <AnalysisResultCard
       title="Identificação da Planta"
@@ -69,7 +81,7 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
             Nome Comum
           </Typography>
           <Typography variant="body1" style={styles.infoValue}>
-            {analysis.identification.commonName}
+            {commonName}
           </Typography>
         </View>
         
@@ -78,7 +90,7 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
             Nome Científico
           </Typography>
           <Typography variant="body2" style={{ color: currentTheme.colors.success, fontStyle: 'italic' }}>
-            {analysis.identification.scientificName}
+            {scientificName || 'Não identificado'}
           </Typography>
         </View>
         
@@ -87,7 +99,7 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
             Família
           </Typography>
           <Typography variant="body2" style={styles.infoValue}>
-            {analysis.identification.family || 'Não identificada'}
+            {family}
           </Typography>
         </View>
         
@@ -97,19 +109,19 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
           </Typography>
           <View style={styles.confidenceBadge}>
             <Typography variant="caption" style={styles.confidenceText}>
-              {analysis.identification.probability}%
+              {confidence}%
             </Typography>
           </View>
         </View>
       </View>
       
-      {analysis.identification.commonNames && analysis.identification.commonNames.length > 0 && (
+      {commonNames.length > 0 && (
         <View style={styles.commonNamesContainer}>
           <Typography variant="caption" style={styles.subLabel}>
             Também conhecida como:
           </Typography>
           <View style={styles.chipsContainer}>
-            {analysis.identification.commonNames.slice(0, 3).map((name, index) => (
+            {commonNames.slice(0, 5).map((name, index) => (
               <Chip
                 key={index}
                 label={name}
@@ -118,6 +130,17 @@ const IdentificationSection: React.FC<IdentificationSectionProps> = ({ analysis 
               />
             ))}
           </View>
+        </View>
+      )}
+      
+      {identification.description && (
+        <View style={{ marginTop: currentTheme.spacing.sm }}>
+          <Typography variant="caption" style={styles.infoLabel}>
+            Descrição
+          </Typography>
+          <Typography variant="body2" style={styles.infoValue}>
+            {identification.description}
+          </Typography>
         </View>
       )}
     </AnalysisResultCard>

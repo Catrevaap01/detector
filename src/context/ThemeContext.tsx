@@ -1,6 +1,6 @@
 // src/context/ThemeContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { useColorScheme, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -60,6 +60,7 @@ interface AppTheme {
     large: number;
     xlarge: number;
   };
+  isDark: boolean;
 }
 
 interface ThemeContextType {
@@ -74,27 +75,22 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 // TEMA CLARO MODERNO
 const lightTheme: AppTheme = {
   colors: {
-    // Verde Natureza Vibrante
-    primary: '#00B894', // Verde água moderno
+    primary: '#00B894',
     primaryLight: '#55EFC4',
     primaryDark: '#00A085',
     
-    // Azul Profundo Elegante
     secondary: '#0984E3',
     secondaryLight: '#74B9FF',
     secondaryDark: '#0A79DF',
     
-    // Neutros Sofisticados
     background: '#F8F9FA',
     surface: '#FFFFFF',
     surfaceVariant: '#F1F2F6',
     
-    // Texto com Bom Contraste
     text: '#2D3436',
     textSecondary: '#636E72',
     textDisabled: '#B2BEC3',
     
-    // Cores de Status Modernas
     error: '#D63031',
     errorLight: '#FFEAA7',
     success: '#00B894',
@@ -103,11 +99,9 @@ const lightTheme: AppTheme = {
     warningLight: '#FFF3C4',
     info: '#6C5CE7',
     
-    // Bordas Suaves
     border: '#DFE6E9',
     borderLight: '#F1F2F6',
     
-    // Overlays
     overlay: 'rgba(45, 52, 54, 0.5)',
     shadow: 'rgba(99, 110, 114, 0.15)',
   },
@@ -137,32 +131,28 @@ const lightTheme: AppTheme = {
     large: 24,
     xlarge: 32,
   },
+  isDark: false,
 };
 
 // TEMA ESCURO MODERNO
 const darkTheme: AppTheme = {
   colors: {
-    // Verde com Mais Saturação
     primary: '#00D8A7',
     primaryLight: '#5CFFD6',
     primaryDark: '#00C095',
     
-    // Azul Mais Brilhante
     secondary: '#1E90FF',
     secondaryLight: '#63B8FF',
     secondaryDark: '#1874CD',
     
-    // Neutros Escuros Profundos
     background: '#0F0F14',
     surface: '#1A1A23',
     surfaceVariant: '#252531',
     
-    // Texto Suave no Escuro
     text: '#EAEAEA',
     textSecondary: '#B0B0C0',
     textDisabled: '#6A6A7A',
     
-    // Cores de Status Vibrantes
     error: '#FF6B6B',
     errorLight: '#2A1F1F',
     success: '#00D8A7',
@@ -171,11 +161,9 @@ const darkTheme: AppTheme = {
     warningLight: '#2A271F',
     info: '#8884FF',
     
-    // Bordas com Contraste
     border: '#2D2D3A',
     borderLight: '#3A3A47',
     
-    // Overlays Mais Escuros
     overlay: 'rgba(0, 0, 0, 0.7)',
     shadow: 'rgba(0, 0, 0, 0.3)',
   },
@@ -183,29 +171,51 @@ const darkTheme: AppTheme = {
   spacing: lightTheme.spacing,
   typography: lightTheme.typography,
   borderRadius: lightTheme.borderRadius,
+  isDark: true,
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentSystemTheme, setCurrentSystemTheme] = useState<'light' | 'dark'>(
+    systemColorScheme || 'light'
+  );
 
-  const getCurrentTheme = (): AppTheme => {
-    if (themeMode === 'auto') {
-      return systemColorScheme === 'dark' ? darkTheme : lightTheme;
+  // 1. Monitorar mudanças no tema do sistema
+  useEffect(() => {
+    // Atualizar com o tema atual imediatamente
+    const currentScheme = Appearance.getColorScheme();
+    if (currentScheme && currentScheme !== currentSystemTheme) {
+      setCurrentSystemTheme(currentScheme);
     }
-    return themeMode === 'dark' ? darkTheme : lightTheme;
-  };
 
+    // Configurar listener para mudanças futuras
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      if (colorScheme && colorScheme !== currentSystemTheme) {
+        console.log('Sistema mudou tema para:', colorScheme);
+        setCurrentSystemTheme(colorScheme);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // 2. Carregar preferência do usuário
   useEffect(() => {
     const loadThemePreference = async () => {
       try {
         const savedTheme = await AsyncStorage.getItem('@plant_detector_theme_mode');
-        if (savedTheme) {
+        if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto')) {
+          console.log('Tema carregado do storage:', savedTheme);
           setThemeMode(savedTheme as ThemeMode);
+        } else {
+          console.log('Nenhum tema salvo, usando modo auto');
+          setThemeMode('auto');
         }
       } catch (error) {
         console.error('Erro ao carregar tema:', error);
+        setThemeMode('auto');
       } finally {
         setIsLoading(false);
       }
@@ -214,7 +224,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     loadThemePreference();
   }, []);
 
+  // 3. Calcular o tema atual de forma otimizada
+  const currentTheme = useMemo((): AppTheme => {
+    let effectiveTheme: 'light' | 'dark';
+    
+    if (themeMode === 'auto') {
+      // Seguir o tema do sistema
+      effectiveTheme = currentSystemTheme === 'dark' ? 'dark' : 'light';
+    } else {
+      // Usar preferência do usuário
+      effectiveTheme = themeMode;
+    }
+    
+    console.log('Calculando tema:', {
+      mode: themeMode,
+      system: currentSystemTheme,
+      effective: effectiveTheme
+    });
+    
+    return effectiveTheme === 'dark' ? darkTheme : lightTheme;
+  }, [themeMode, currentSystemTheme]);
+
+  // 4. Função para alterar tema
   const toggleTheme = async (mode: ThemeMode) => {
+    console.log('Alterando tema para:', mode);
     setThemeMode(mode);
     try {
       await AsyncStorage.setItem('@plant_detector_theme_mode', mode);
@@ -227,8 +260,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const currentTheme = getCurrentTheme();
-  const isDark = currentTheme === darkTheme;
+  const isDark = currentTheme.isDark;
 
   return (
     <ThemeContext.Provider value={{
@@ -249,7 +281,9 @@ export function useTheme() {
   }
   
   // Helper function para criar estilos
-  const makeStyles = (stylesFn: (theme: AppTheme) => any) => {
+  const makeStyles = <T extends Record<string, any>>(
+    stylesFn: (theme: AppTheme) => T
+  ): T => {
     return stylesFn(context.currentTheme);
   };
 

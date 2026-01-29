@@ -7,7 +7,11 @@ const extra =
   {};
 
 export const ENV = {
-  PLANTNET_API_URL: extra.EXPO_PUBLIC_PLANTNET_API_URL as string,
+  PLANTNET_API_URL: { 
+    IDENTIFIED: extra.EXPO_PUBLIC_PLANTNET_API_URL as string,
+    DISEASES:   extra.EXPO_PUBLIC_PLANTNET_DISEASES_API_URL as string,
+  },
+  
   PLANTNET_API_KEY: extra.EXPO_PUBLIC_PLANTNET_API_KEY as string,
   KINDUISE_API_URL: extra.EXPO_PUBLIC_KINDUISE_API_URL as string,
   KINDUISE_API_KEY: extra.EXPO_PUBLIC_KINDUISE_API_KEY as string,

@@ -1,10 +1,12 @@
 // src/utils/apiConfig.ts
 import { ENV } from '../config/env';
 
+
 export const API_CONFIG = {
   // PlantNet API (GRATUITA com limite)
   PLANTNET: {
-    URL: ENV.PLANTNET_API_URL,
+    URL: ENV.PLANTNET_API_URL.IDENTIFIED,
+    URL_DISEASES: ENV.PLANTNET_API_URL.DISEASES,
     API_KEY: ENV.PLANTNET_API_KEY,
     
     // Projetos disponíveis
@@ -19,6 +21,14 @@ export const API_CONFIG = {
       'include-related-images': false,
       'no-reject': false,
       'lang': 'pt'
+    },
+
+   // Função para gerar os parâmetros de doenças com base nos parâmetros padrão
+    getDiseaseParams: (additionalParams: object = {}) => {
+      return {
+        ...API_CONFIG.PLANTNET.DEFAULT_PARAMS,  // Herda os parâmetros comuns
+        ...additionalParams,                    // Adiciona ou sobrescreve parâmetros específicos de doenças
+      };
     }
   },
 

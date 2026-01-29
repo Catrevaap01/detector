@@ -1,6 +1,6 @@
 // src/components/analysis/sections/DiseasesSection.tsx
 import React from 'react';
-import { View, ScrollView, Dimensions } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Typography from '../../common/typography/Typography';
 import DiseaseCard from '../cards/DiseaseCard';
@@ -11,28 +11,59 @@ interface DiseasesSectionProps {
 }
 
 const DiseasesSection: React.FC<DiseasesSectionProps> = ({ diseases, theme }) => {
-  const { width: screenWidth } = Dimensions.get('window');
-  
-  // Largura do card baseada no DiseaseCard atual (300px) com espaçamento
-  const cardWidth = 300; // Mesma largura definida no DiseaseCard
-  const cardGap = theme.spacing.md;
-  const horizontalPadding = theme.spacing.md;
-  
-  // Calcula margem extra para o último item
-  const extraRightPadding = horizontalPadding;
+  // Se não houver doenças
+  if (!diseases || diseases.length === 0) {
+    return (
+      <View style={{ 
+        marginBottom: theme.spacing.lg,
+        paddingHorizontal: theme.spacing.md,
+      }}>
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          marginBottom: theme.spacing.md,
+        }}>
+          <View style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: `${theme.colors.success}15`,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: theme.spacing.sm,
+          }}>
+            <Icon name="check-circle" size={22} color={theme.colors.success} />
+          </View>
+          <Typography variant="h4" style={{ 
+            color: theme.colors.text,
+            fontWeight: '700',
+            fontSize: 18,
+          }}>
+            Sem Problemas Detectados
+          </Typography>
+        </View>
+        
+        <Typography variant="body2" style={{ 
+          color: theme.colors.textSecondary,
+          paddingHorizontal: theme.spacing.sm,
+          lineHeight: 22,
+        }}>
+          A análise não identificou problemas na planta. Continue com os cuidados regulares.
+        </Typography>
+      </View>
+    );
+  }
 
   return (
     <View style={{ 
       marginBottom: theme.spacing.lg,
-      width: '100%',
     }}>
       {/* Header da seção */}
       <View style={{ 
         flexDirection: 'row', 
-        alignItems: 'center', 
-        gap: theme.spacing.sm,
+        alignItems: 'center',
         marginBottom: theme.spacing.md,
-        paddingHorizontal: horizontalPadding,
+        paddingHorizontal: theme.spacing.md,
       }}>
         <View style={{
           width: 36,
@@ -41,7 +72,7 @@ const DiseasesSection: React.FC<DiseasesSectionProps> = ({ diseases, theme }) =>
           backgroundColor: `${theme.colors.error}15`,
           justifyContent: 'center',
           alignItems: 'center',
-          flexShrink: 0,
+          marginRight: theme.spacing.sm,
         }}>
           <Icon name="alert" size={22} color={theme.colors.error} />
         </View>
@@ -54,50 +85,44 @@ const DiseasesSection: React.FC<DiseasesSectionProps> = ({ diseases, theme }) =>
         </Typography>
       </View>
 
-      {/* Container do ScrollView com largura total */}
-      <View style={{ width: '100%' }}>
-        <ScrollView 
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={cardWidth + cardGap}
-          snapToAlignment="start"
-          contentContainerStyle={{
-            paddingLeft: horizontalPadding,
-            paddingRight: horizontalPadding + extraRightPadding,
-            gap: cardGap,
-            alignItems: 'flex-start',
-          }}
-          style={{
-            width: '100%',
-          }}
-        >
-          {diseases.map((disease: any, index: number) => (
+      {/* Container do ScrollView */}
+      <ScrollView 
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={320} // Largura fixa + margem
+        snapToAlignment="start"
+        contentContainerStyle={{
+          paddingLeft: theme.spacing.md,
+          paddingRight: theme.spacing.md * 2,
+          paddingBottom: theme.spacing.sm,
+        }}
+      >
+        {diseases.map((disease: any, index: number) => (
+          <View key={index} style={{ marginRight: theme.spacing.md }}>
             <DiseaseCard
-              key={index}
               disease={disease}
               index={index}
               theme={theme}
               variant="horizontal"
-              // O DiseaseCard já tem width: 300 definido internamente
             />
-          ))}
-        </ScrollView>
-      </View>
+          </View>
+        ))}
+      </ScrollView>
       
-      {/* Indicador de scroll (opcional) */}
+      {/* Indicador de scroll */}
       {diseases.length > 1 && (
         <View style={{
           flexDirection: 'row',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: 4,
           marginTop: theme.spacing.sm,
-          paddingHorizontal: horizontalPadding,
+          paddingHorizontal: theme.spacing.md,
         }}>
           <Typography variant="caption" style={{ 
             color: theme.colors.textTertiary,
             fontSize: 11,
+            marginRight: 4,
           }}>
             Deslize para ver mais
           </Typography>

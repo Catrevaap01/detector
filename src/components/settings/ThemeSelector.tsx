@@ -2,7 +2,6 @@
 import React from 'react';
 import {
   View,
-  StyleSheet,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme, ThemeMode } from '../../hooks/useTheme';
@@ -18,7 +17,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   currentThemeMode,
   onThemeChange,
 }) => {
-  const { currentTheme, makeStyles } = useTheme();
+  const { currentTheme, makeStyles, isDark } = useTheme();
   const styles = makeStyles((theme) => ({
     container: {
       marginBottom: theme.spacing.xl,
@@ -59,7 +58,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
     {
       id: 'auto',
       label: 'Automático',
-      description: 'Seguir configuração do sistema',
+      description: `Seguir configuração do sistema (${isDark ? 'Escuro' : 'Claro'})`,
       icon: 'theme-light-dark',
     },
     {
@@ -93,21 +92,30 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               onPress={() => onThemeChange(option.id as ThemeMode)}
               style={[
                 styles.optionButton,
-                isSelected && { backgroundColor: currentTheme.colors.primary + '20' }
+                isSelected && { 
+                  backgroundColor: currentTheme.colors.primary + '20',
+                  borderWidth: 1,
+                  borderColor: currentTheme.colors.primary,
+                }
               ]}
             >
               <View style={styles.optionLeft}>
                 <Icon
                   name={option.icon}
                   size={24}
-                  color={currentTheme.colors.primary}
+                  color={isSelected ? currentTheme.colors.primary : currentTheme.colors.textSecondary}
                   style={styles.optionIcon}
                 />
                 <View style={{ flex: 1 }}>
-                  <Typography variant="body1" style={styles.optionLabel}>
+                  <Typography variant="body1" style={[
+                    styles.optionLabel,
+                    isSelected && { color: currentTheme.colors.primary, fontWeight: '600' }
+                  ]}>
                     {option.label}
                   </Typography>
-                  <Typography variant="caption" style={{ color: currentTheme.colors.textSecondary }}>
+                  <Typography variant="caption" style={{ 
+                    color: isSelected ? currentTheme.colors.primary : currentTheme.colors.textSecondary 
+                  }}>
                     {option.description}
                   </Typography>
                 </View>

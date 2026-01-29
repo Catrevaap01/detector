@@ -1,8 +1,7 @@
 // src/services/DetectionService.ts
 import * as ImageManipulator from 'expo-image-manipulator';
 import PlantNetService, { PlantInfo } from './PlantNetService';
-import KindwisePlantHealthService, { PlantHealthResponse, DiseaseDiagnosis } from './KindwisePlantHealthService';
-import { findTreatment } from './TreatmentDatabase';
+import PlantNetDiseaseService, { PlantDiseaseInfo } from './PlantNetDiseasesService';
 
 // Tipos exportados (mantidos para compatibilidade)
 export interface DiseaseInfo {
@@ -92,39 +91,38 @@ class DetectionService {
     }
   }
 
-  // Orquestrar análise completa usando serviços especializados
+  // Orquestrar análise completa usando APENAS PlantNet
   static async completeAnalysis(
     imageUri: string, 
     location?: any
   ): Promise<CompleteAnalysis> {
-    console.log('🚀 Iniciando análise orquestrada...');
+    console.log('🚀 Iniciando análise orquestrada (apenas PlantNet)...');
 
     try {
       // 1. Identificar planta com PlantNetService
       console.log('🌿 Identificando planta...');
       const plantInfo = await PlantNetService.identifyPlant(imageUri);
-      
-      // 2. Diagnóstico de saúde com KindwisePlantHealthService
-      console.log('🏥 Diagnosticando saúde...');
-      let healthResponse: PlantHealthResponse;
-      
-      if (KindwisePlantHealthService.canUseRealAPI()) {
-        healthResponse = await KindwisePlantHealthService.diagnosePlant(
-          imageUri, 
-          plantInfo.scientificName
-        );
-      } else {
-        healthResponse = await KindwisePlantHealthService.simulateDiagnosis(
-          imageUri,
-          plantInfo.scientificName
-        );
+
+      // 2. Identificar doenças com PlantNetDiseaseService
+      console.log('🦠 Identificando doenças...');
+      let diseasesResult;
+      try {
+        diseasesResult = await PlantNetDiseaseService.identifyPlantDisease(imageUri);
+        console.log('✅ Doenças identificadas:', diseasesResult);
+      } catch (diseaseError) {
+        console.log('⚠️  Não foi possível identificar doenças:', diseaseError);
+        // Se falhar, usar resultado vazio
+        diseasesResult = {
+          mainResult: null,
+          otherResults: []
+        };
       }
 
-      // 3. Combinação dos resultados
-      console.log('🔗 Combinando resultados...');
-      const completeAnalysis = this.combineResults(
+      // 3. Combinação dos resultados (apenas PlantNet)
+      console.log('🔗 Combinando resultados do PlantNet...');
+      const completeAnalysis = this.combinePlantNetResults(
         plantInfo,
-        healthResponse,
+        diseasesResult,
         imageUri,
         location
       );
@@ -141,28 +139,42 @@ class DetectionService {
     }
   }
 
-  // Combina resultados dos serviços especializados
-  private static combineResults(
+  // Combina resultados APENAS do PlantNet
+  private static combinePlantNetResults(
     plantInfo: PlantInfo,
-    healthResponse: PlantHealthResponse,
+    diseasesResult: {
+      mainResult: PlantDiseaseInfo | null;
+      otherResults: PlantDiseaseInfo[];
+    },
     imageUri: string,
     location?: any
   ): CompleteAnalysis {
-    // Converter doenças do Kindwise para formato padrão
-    const diseases: DiseaseInfo[] = healthResponse.diseases.map(disease => ({
-      name: disease.name,
-      probability: disease.probability,
-      severity: disease.severity,
-      description: disease.description || 'Doença identificada',
-      treatment: this.getTreatmentForDisease(disease),
-      symptoms: disease.affectedParts ? [`Afeta: ${disease.affectedParts.join(', ')}`] : []
-    }));
+    // Converter doenças do PlantNet para formato padrão
+    const diseases: DiseaseInfo[] = [];
+    
+    // Adicionar doença principal se existir
+    if (diseasesResult.mainResult) {
+      const mainDisease = this.convertPlantNetDisease(diseasesResult.mainResult);
+      diseases.push(mainDisease);
+    }
+    
+    // Adicionar outras doenças
+    diseasesResult.otherResults.forEach(diseaseResult => {
+      const disease = this.convertPlantNetDisease(diseaseResult);
+      diseases.push(disease);
+    });
 
-    // Determinar status de saúde
-    const healthStatus = healthResponse.isHealthy ? 'healthy' : 
-                        healthResponse.healthScore > 50 ? 'warning' : 'critical';
+    // Determinar status de saúde baseado nas doenças encontradas
+    const hasDiseases = diseases.length > 0;
+    const avgProbability = diseases.length > 0 
+      ? diseases.reduce((sum, d) => sum + d.probability, 0) / diseases.length 
+      : 0;
+    
+    const healthScore = hasDiseases ? Math.max(0, 100 - avgProbability) : 100;
+    const healthStatus = healthScore >= 80 ? 'healthy' : 
+                        healthScore >= 50 ? 'warning' : 'critical';
 
-    // Gerar sugestões combinadas
+    // Gerar sugestões
     const suggestions: Suggestion[] = [
       {
         name: plantInfo.commonName,
@@ -170,20 +182,23 @@ class DetectionService {
         scientificName: plantInfo.scientificName,
         description: `Planta identificada: ${plantInfo.commonName}`,
         isPest: false
-      },
-      ...healthResponse.diseases.map(disease => ({
-        name: disease.name,
-        probability: disease.probability,
-        scientificName: disease.scientificName,
-        description: disease.description,
-        isPest: disease.type === 'pest',
-        treatment: findTreatment(disease.name),
-        symptoms: disease.description
-      }))
+      }
     ];
 
+    // Adicionar sugestões de doenças
+    diseases.forEach(disease => {
+      suggestions.push({
+        name: disease.name,
+        probability: disease.probability,
+        description: disease.description,
+        isPest: this.isPestDisease(disease.name),
+        treatment: this.getDefaultTreatment(disease.name),
+        symptoms: disease.symptoms
+      });
+    });
+
     // Tratamentos baseados nas doenças
-    const treatment = this.generateTreatment(healthResponse, diseases);
+    const treatment = this.generateTreatmentFromDiseases(diseases, healthScore);
 
     return {
       timestamp: new Date().toISOString(),
@@ -196,11 +211,11 @@ class DetectionService {
       },
       health: {
         status: healthStatus,
-        score: healthResponse.healthScore,
-        isHealthy: healthResponse.isHealthy,
-        healthScore: healthResponse.healthScore,
+        score: healthScore,
+        isHealthy: !hasDiseases,
+        healthScore: healthScore,
         diseases,
-        recommendations: healthResponse.suggestions
+        recommendations: this.generateRecommendations(diseases, plantInfo)
       },
       treatment,
       suggestions,
@@ -213,55 +228,151 @@ class DetectionService {
     };
   }
 
-  // Obter tratamento para doença
-  private static getTreatmentForDisease(disease: DiseaseDiagnosis): DiseaseInfo['treatment'] {
-    const customTreatment = findTreatment(disease.name);
+  // Converter doença do PlantNet para formato padrão
+  private static convertPlantNetDisease(diseaseResult: PlantDiseaseInfo): DiseaseInfo {
+    const diseaseType = PlantNetDiseaseService.getPlantProblemType(diseaseResult.commonName);
     
-    if (customTreatment) {
-      return {
-        organic: customTreatment.organic || [],
-        chemical: customTreatment.chemical || [],
-        preventive: customTreatment.preventive || []
-      };
-    }
+    // Determinar severidade baseada na probabilidade
+    const severity = diseaseResult.probability >= 50 ? 'high' : 
+                     diseaseResult.probability >= 20 ? 'medium' : 'low';
 
-    // Tratamento padrão baseado no tipo
+    // Obter tratamento baseado no tipo de doença
+    const treatment = this.getTreatmentByType(diseaseType);
+
     return {
-      organic: disease.treatment || ['Tratamento orgânico recomendado'],
-      chemical: ['Consulte produto químico específico'],
-      preventive: disease.prevention || ['Boas práticas agrícolas']
+      name: diseaseResult.commonName,
+      probability: diseaseResult.probability,
+      severity,
+      description: diseaseResult.description,
+      treatment,
+      symptoms: [`Tipo: ${diseaseType}`, `Código: ${diseaseResult.code}`]
     };
   }
 
-  // Gerar plano de tratamento
-  private static generateTreatment(
-    healthResponse: PlantHealthResponse,
-    diseases: DiseaseInfo[]
+  // Verificar se é praga
+  private static isPestDisease(diseaseName: string): boolean {
+    return PlantNetDiseaseService.isPlantPest(diseaseName);
+  }
+
+  // Obter tratamento padrão baseado no tipo de doença
+  private static getTreatmentByType(diseaseType: string): DiseaseInfo['treatment'] {
+    const baseTreatment = {
+      organic: [] as string[],
+      chemical: [] as string[],
+      preventive: [] as string[]
+    };
+
+    switch (diseaseType) {
+      case 'inseto':
+        baseTreatment.organic = ['Óleo de neem', 'Sabão inseticida', 'Extrato de alho'];
+        baseTreatment.chemical = ['Inseticida piretróide', 'Inseticida sistêmico'];
+        baseTreatment.preventive = ['Armadilhas adesivas', 'Rotação de culturas', 'Controle biológico'];
+        break;
+      
+      case 'fungo':
+        baseTreatment.organic = ['Calda bordalesa', 'Bicarbonato de sódio', 'Leite diluído'];
+        baseTreatment.chemical = ['Fungicida sistêmico', 'Fungicida de contato'];
+        baseTreatment.preventive = ['Boa ventilação', 'Evitar irrigação foliar', 'Poda adequada'];
+        break;
+      
+      case 'bacteria':
+        baseTreatment.organic = ['Extrato de alho', 'Óleo essencial de tomilho'];
+        baseTreatment.chemical = ['Produtos à base de cobre', 'Bactericida específico'];
+        baseTreatment.preventive = ['Ferramentas desinfetadas', 'Evitar ferimentos', 'Drenagem adequada'];
+        break;
+      
+      case 'virus':
+        baseTreatment.organic = ['Extrato de urtiga', 'Silício'];
+        baseTreatment.chemical = ['Não há tratamento químico eficaz'];
+        baseTreatment.preventive = ['Controle de vetores', 'Uso de mudas sadias', 'Eliminar plantas infectadas'];
+        break;
+      
+      default:
+        baseTreatment.organic = ['Adubação orgânica', 'Fortalecimento natural'];
+        baseTreatment.chemical = ['Consultar especialista'];
+        baseTreatment.preventive = ['Monitoramento regular', 'Boas práticas agrícolas'];
+    }
+
+    return baseTreatment;
+  }
+
+  // Obter tratamento padrão para sugestões
+  private static getDefaultTreatment(diseaseName: string): any {
+    const diseaseType = PlantNetDiseaseService.getPlantProblemType(diseaseName);
+    return {
+      type: diseaseType,
+      recommendations: this.getTreatmentByType(diseaseType)
+    };
+  }
+
+  // Gerar recomendações
+  private static generateRecommendations(diseases: DiseaseInfo[], plantInfo: PlantInfo): string[] {
+    const recommendations: string[] = [];
+    
+    if (diseases.length === 0) {
+      recommendations.push(
+        'Planta parece saudável',
+        'Continue com os cuidados regulares',
+        'Monitore regularmente'
+      );
+    } else {
+      recommendations.push(
+        `Foram identificadas ${diseases.length} doença(s) potencial(is)`,
+        'Considere aplicar tratamento recomendado',
+        'Monitore a evolução diariamente',
+        `Planta identificada: ${plantInfo.commonName}`
+      );
+      
+      // Adicionar recomendações específicas por doença
+      diseases.forEach((disease, index) => {
+        if (disease.probability > 30) {
+          recommendations.push(
+            `${index + 1}. Prioridade: ${disease.name} (${disease.probability}%)`
+          );
+        }
+      });
+    }
+    
+    return recommendations;
+  }
+
+  // Gerar plano de tratamento baseado nas doenças
+  private static generateTreatmentFromDiseases(
+    diseases: DiseaseInfo[],
+    healthScore: number
   ): Treatment {
     const hasDiseases = diseases.length > 0;
-    const isCritical = healthResponse.healthScore < 40;
+    const isCritical = healthScore < 40;
 
-    return {
+    const treatment: Treatment = {
       immediate: hasDiseases ? [
         'Identificar problema específico',
-        'Isolar planta se necessário'
+        'Isolar planta se necessário',
+        'Documentar sintomas'
       ] : ['Nenhuma ação imediata necessária'],
       
       shortTerm: hasDiseases ? [
         'Aplicar tratamento recomendado',
-        'Monitorar evolução diariamente'
+        'Monitorar evolução diariamente',
+        'Fotografar progresso'
       ] : ['Continuar cuidados regulares'],
       
       longTerm: hasDiseases ? [
         'Implementar medidas preventivas',
-        'Fortalecer defesas naturais da planta'
-      ] : ['Manter rotina de cuidados'],
-      
-      products: hasDiseases ? [
-        { name: 'Óleo de Neem', type: 'organic', dosage: '5ml por litro' },
-        { name: 'Fungicida/Inseticida', type: 'chemical', dosage: 'Conforme instruções' }
-      ] : undefined
+        'Fortalecer defesas naturais da planta',
+        'Manter registro de ocorrências'
+      ] : ['Manter rotina de cuidados']
     };
+
+    // Adicionar produtos sugeridos se houver doenças
+    if (hasDiseases) {
+      treatment.products = [
+        { name: 'Óleo de Neem', type: 'organic', dosage: '5ml por litro de água' },
+        { name: 'Fungicida/Inseticida', type: 'chemical', dosage: 'Seguir instruções do fabricante' }
+      ];
+    }
+
+    return treatment;
   }
 
   // Análise rápida (apenas identificação)

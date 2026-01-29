@@ -36,7 +36,7 @@ class PlantNetService {
   // Identificar planta com PlantNet (com API key)
   static async identifyPlant(imageUri: string): Promise<PlantInfo> {
     // Verificar se tem API key
-    if (!API_CONFIG.PLANTNET.API_KEY || API_CONFIG.PLANTNET.API_KEY === 'SEU_API_KEY_AQUI') {
+    if (!API_CONFIG.PLANTNET.API_KEY) {
       throw new Error('API Key do PlantNet não configurada. Obtenha uma em: https://my.plantnet.org/account');
     }
 
@@ -59,7 +59,10 @@ API_CONFIG.KINDUISE.API_KEY);
       } as any);
 
       // URL com API key como query parameter
-      const apiUrl = `${API_CONFIG.PLANTNET.URL}?api-key=${API_CONFIG.PLANTNET.API_KEY}`;
+      const apiUrl = `${API_CONFIG.PLANTNET.URL}/${API_CONFIG.PLANTNET.PROJECTS.ALL}?api-key=${API_CONFIG.PLANTNET.API_KEY}`;
+
+      console.log(apiUrl);
+      
 
       const response = await axios.post<PlantNetResponse>(
         apiUrl,
@@ -73,7 +76,7 @@ API_CONFIG.KINDUISE.API_KEY);
         }
       );
 
-      console.log('✅ Resposta PlantNet:', response.data);
+      console.log('✅ Resposta PlantNet:', JSON.stringify(response.data, null, 2));
       
       if (!response.data.results || response.data.results.length === 0) {
         throw new Error('Nenhuma planta identificada na imagem');
@@ -181,35 +184,6 @@ API_CONFIG.KINDUISE.API_KEY);
   static isPlantPest(plantName: string): boolean {
     const lowerName = plantName.toLowerCase();
     return API_CONFIG.PEST_KEYWORDS.some(keyword => lowerName.includes(keyword));
-  }
-
-  // Obter tipo de problema
-  static getPlantProblemType(plantName: string): string {
-    const lowerName = plantName.toLowerCase();
-    
-    if (API_CONFIG.PEST_KEYWORDS.some(kw => 
-      ['lagarta', 'broca', 'pulgão', 'ácaro', 'cochonilha'].includes(kw) && 
-      lowerName.includes(kw)
-    )) {
-      return 'inseto';
-    }
-    
-    if (API_CONFIG.PEST_KEYWORDS.some(kw => 
-      ['ferrugem', 'oídio', 'míldio', 'fungo'].includes(kw) && 
-      lowerName.includes(kw)
-    )) {
-      return 'fungo';
-    }
-    
-    if (lowerName.includes('bactéria')) {
-      return 'bacteria';
-    }
-    
-    if (lowerName.includes('vírus')) {
-      return 'virus';
-    }
-    
-    return 'outro';
   }
 }
 
