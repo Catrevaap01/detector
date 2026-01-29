@@ -1,16 +1,48 @@
 // src/components/SplashScreen.tsx
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AnimatedSplash from './AnimatedSplash';
+import { useTheme } from '../../hooks/useTheme';
 
 const SplashScreen = () => {
+  const { currentTheme, makeStyles } = useTheme();
+  
+  const styles = makeStyles((theme) => ({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    textContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: theme.spacing.lg,
+    },
+    microscopeIcon: {
+      marginRight: theme.spacing.md,
+    },
+    title: {
+      fontSize: theme.typography.h1.fontSize,
+      fontWeight: theme.typography.h1.fontWeight,
+      color: theme.colors.text,
+      letterSpacing: 0.5,
+    },
+    subtitle: {
+      fontSize: theme.typography.body1.fontSize,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      opacity: 0.8,
+    },
+  }));
+
   return (
     <View style={styles.container}>
       <AnimatedSplash>
-        <Icon name="leaf" size={80} color="#00B894" />
+        <Icon name="leaf" size={80} color={currentTheme.colors.primary} />
         <View style={styles.textContainer}>
-          <Icon name="microscope" size={24} color="#00B894" style={styles.microscopeIcon} />
+          <Icon name="microscope" size={24} color={currentTheme.colors.primary} style={styles.microscopeIcon} />
           <AnimatedSplash.Text style={styles.title}>
             Detector de Pragas
           </AnimatedSplash.Text>
@@ -22,34 +54,5 @@ const SplashScreen = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  textContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  microscopeIcon: {
-    marginRight: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#2D3436',
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#636E72',
-    marginTop: 8,
-    opacity: 0.8,
-  },
-});
 
 export default SplashScreen;

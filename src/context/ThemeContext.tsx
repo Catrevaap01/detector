@@ -176,6 +176,9 @@ const darkTheme: AppTheme = {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
+
+  console.log("Cor do sistema: "+systemColorScheme);
+
   const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
   const [isLoading, setIsLoading] = useState(true);
   const [currentSystemTheme, setCurrentSystemTheme] = useState<'light' | 'dark'>(

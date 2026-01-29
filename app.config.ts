@@ -3,25 +3,30 @@ import { ExpoConfig, ConfigContext } from '@expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'detector-app',
+  name: 'PlantaVigia',
   slug: 'detector-app',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/icon.png',
-  userInterfaceStyle: 'light',
+  icon: './assets/logo.png',
+  userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   splash: {
-    image: './assets/splash-icon.png',
+    image: './assets/logo.png',
     resizeMode: 'contain',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#121212',
   },
   ios: {
+    bundleIdentifier: 'com.justinocode.detectorapp',
     supportsTablet: true,
   },
   android: {
+    package: 'com.justinocode.detectorapp',
+    permessions: [
+      'CAMERA'
+    ],
     adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#ffffff',
+      foregroundImage: './assets/logo.png',
+      backgroundColor: '#121212',
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
@@ -35,5 +40,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     EXPO_PUBLIC_PLANTNET_API_KEY: process.env.EXPO_PUBLIC_PLANTNET_API_KEY,
     EXPO_PUBLIC_KINDUISE_API_URL: process.env.EXPO_PUBLIC_KINDUISE_API_URL,
     EXPO_PUBLIC_KINDUISE_API_KEY: process.env.EXPO_PUBLIC_KINDUISE_API_KEY,
+
+    eas: {
+        projectId: '6a655d67-54fb-4732-b2b5-d9eebaf2f1db'
+      }
   },
 });
